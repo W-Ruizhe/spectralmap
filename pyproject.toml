@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SpectralMap"
+version = "0.1.0"
+description = "Template repo for spectral (wavelength-resolved) rotational + eclipse mapping"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Your Name", email = "you@example.com"}]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "astropy>=5",
+  # "starry>=1.2",   # optional; uncomment if you depend on starry
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3.7"]
+docs = [
+  "sphinx>=7",
+  "sphinx-rtd-theme>=2",
+  "sphinx-autodoc-typehints>=2",
+  "myst-parser>=2",
+  "sphinx-copybutton>=0.5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
