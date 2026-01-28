@@ -9,7 +9,7 @@ from importlib.metadata import version as pkg_version
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src")))
 
 project = "spectralmap"
-author = "Your Name"
+author = "Ruizhe Wang"
 copyright = f"{date.today().year}, {author}"
 
 # Project versioning

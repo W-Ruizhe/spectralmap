@@ -454,7 +454,7 @@ def optimize_alpha_beta(
     print("log_delta_log_beta:", log_delta_log_beta)
     print("beta:", beta)
     print("Alpha:", Alpha)
-    log_ev_marginalized_over_alpha_beta = log_ev + log_delta_log_alpha + log_delta_log_beta + num_regularizer / 2 * np.log(2 * np.pi)
+    log_ev_marginalized = log_ev + log_delta_log_alpha + log_delta_log_beta + num_regularizer / 2 * np.log(2 * np.pi)
 
     log_ev_dict = dict(
         log_ev=log_ev,
@@ -462,7 +462,7 @@ def optimize_alpha_beta(
         log_ev_beta=log_ev_beta,
         log_ev_det=log_ev_det,
         log_ev_normalization=log_ev_normalization,
-        log_ev_marginalized_over_alpha_beta=log_ev_marginalized_over_alpha_beta,
+        log_ev_marginalized=log_ev_marginalized,
     )
 
     # Return alpha in same "shape" as user gave

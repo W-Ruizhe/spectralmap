@@ -17,3 +17,6 @@ docs/source/api/generated/
 .DS_Store
 .vscode/
 .idea/
+
+# Large data files
+docs/source/tutorials/W1049B_NIRSpec_processed.npz

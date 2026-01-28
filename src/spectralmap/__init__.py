@@ -34,5 +34,9 @@ except Exception:
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 # ------------------------------------------
 
-__all__ = ["__version__"]
+from . import bayesian_linalg
+from . import cluster
+from . import mapping
+
+__all__ = ["__version__", "bayesian_linalg", "cluster", "mapping"]
 __version__ = _version("spectralmap")

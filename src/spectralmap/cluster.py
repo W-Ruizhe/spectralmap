@@ -90,10 +90,10 @@ def get_best_polygon_by_points(points, min_corners=3, sensitivity=5.0):
 
 
 def find_clusters(F_all_wl, F_cov_all_wl, n_neighbors=50):
-    """ W: (n_grid, n_wl) """
+    """ F_all_wl: (n_wl, n_grid) """
     # --- 2. CONFIGURATION & SORTING ---
-    X = F_all_wl
-    log_X = np.log10(F_all_wl)
+    X = F_all_wl.T
+    log_X = np.log10(X)
     pca = PCA(n_components=2)
     W = pca.fit_transform(log_X)
 
@@ -150,7 +150,7 @@ def find_clusters(F_all_wl, F_cov_all_wl, n_neighbors=50):
     F_regionals = None
     F_regional_errs = None
     F_regional_covs = None
-    V = np.zeros((np.unique(labels).size, F_all_wl.shape[0])) # (n_clusters, n_spatial_points)
+    V = np.zeros((np.unique(labels).size, X.shape[0])) # (n_clusters, n_spatial_points)
 
     for i, label in enumerate(np.unique(labels)):
         ind = labels == label
@@ -159,8 +159,9 @@ def find_clusters(F_all_wl, F_cov_all_wl, n_neighbors=50):
         weights = np.ones(N) / N
         V[i, ind] = weights
 
-    F_regionals = V @ F_all_wl # (n_clusters, n_wavelengths) use the original X (not log_X) for the mean
-    F_regional_errs = np.einsum('ij,wjk,kl->wil', V, F_cov_all_wl, V.T)
-    F_regional_covs = np.sqrt(np.diagonal(F_regional_errs, axis1=1, axis2=2)).T # (n_clusters, n_wavelengths)
+    F_regionals = V @ X # (n_clusters, n_wavelengths) use the original X (not log_X) for the mean
+
+    F_regional_covs = np.einsum('ij,wjk,kl->wil', V, F_cov_all_wl, V.T)
+    F_regional_errs = np.sqrt(np.diagonal(F_regional_covs, axis1=1, axis2=2)).T # (n_clusters, n_wavelengths)
 
     return F_regionals, F_regional_errs, labels

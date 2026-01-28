@@ -8,17 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
-from jaxoplanet.core.limb_dark import light_curve as _limb_dark_light_curve
-from jaxoplanet.starry.core.basis import A1, A2_inv, U
-from jaxoplanet.starry.core.polynomials import Pijk
-from jaxoplanet.starry.core.rotation import left_project, sky_projection_axis_angle, dot_rotation_matrix
-from jaxoplanet.starry.core.solution import rT, solution_vector
-from jaxoplanet.starry.surface import Surface
-import jax.numpy as jnp
-from jaxoplanet.starry.system_observable import system_observable
-
-
-from spectralmap.bayesian_linalg import optimize_alpha_fixed_beta, solve_posterior
+import starry
+# starry.config.lazy = False  # disable lazy evaluation
+# starry.config.quiet = True  # disable warnings
+from spectralmap.bayesian_linalg import optimize_alpha_fixed_beta, optimize_alpha_beta
 
 @dataclass
 class LightCurveData:
@@ -31,10 +24,11 @@ class LightCurveData:
         self.inc = inc
 
 class Map:
-    """A placeholder mapping class."""
-    def __init__(self, ydeg: int = 5, inc: int = 90, map_res: int = 30, map_type: str = 'rotational'):
+    """A helper mapping class wraps starry.Map."""
+    def __init__(self, ydeg: int = 5, inc: int = 90, map_res: int = 30, map_type: str = 'Use starry.Map'):
         self.type = map_type
         self.inc = inc
+        self.map = starry.Map(ydeg=ydeg, inc=inc)
         lats, lons = self.map.get_latlon_grid(res=map_res, projection='rect')
         self.lats, self.lons = lats, lons
         self.map_res = map_res
@@ -42,26 +36,12 @@ class Map:
         
     def design_matrix(self, theta: np.ndarray) -> np.ndarray:
         """Compute design matrix for given observation angles theta."""
-        ydeg = self.ydeg
-        inc = self.inc
-        rT_deg = rT(ydeg)
-        design_matrix_p = rT_deg # n_pol x n_sph
-        n_sph = design_matrix_p.shape[1]
-        n_pol = design_matrix_p.shape[0]
-        # surface map, no limb darkening
-        A1_val = A1(ydeg) # n_pol x n_sph
-        A = np.zeros((len(theta), n_sph))
-
-        axis_x, axis_y, axis_z, angle = sky_projection_axis_angle(inc, 0)
-        Rx = dot_rotation_matrix(ydeg, 1.0, None, None, -0.5 * jnp.pi)
-        Rinc = dot_rotation_matrix(ydeg, axis_x, axis_y, axis_z, angle)
-
-
-        for i in range(len(theta)):
-            Ry = dot_rotation_matrix(ydeg, None, None, 1.0, -theta[i])
-            R =  Rinc @ Ry @ Rx  # n_sph x n_sph
-            A[i] = design_matrix_p @ (A1_val @ R)
-
+        A = self.map.design_matrix(theta=theta)
+        
+        # Evaluate to numpy if it's a theano/tensor variable
+        if hasattr(A, 'eval'):
+            A = A.eval()
+            
         self.design_matrix_ = A
         self.theta = theta
         return A
@@ -69,6 +49,8 @@ class Map:
     def intensity_design_matrix(self) -> np.ndarray:
         """Compute intensity design matrix for given lat/lon grid."""
         I = self.map.intensity_design_matrix(lat=self.lats.flatten(), lon=self.lons.flatten())
+        if hasattr(I, 'eval'):
+            I = I.eval()
         self.intensity_design_matrix_ = I
         return I
     
@@ -93,13 +75,22 @@ class Map:
 
         mu0 = np.zeros(img_U.shape[1])
         mu0[0] = 0 # remember to remove the constant term from A before solving! and mean subtract data
-        m, S, alpha, gamma, log_ev_dict = optimize_alpha_fixed_beta(
-            img_U, y,
-            sigma_y=sigma_y,
-            alpha_guess=1.0,        # scalar or (d,) initial prior precisions
-            mu0=mu0,
-            maxit=5000,
-        )
+        if sigma_y is not None:
+            m, S, alpha, gamma, log_ev_dict = optimize_alpha_fixed_beta(
+                img_U, y,
+                sigma_y=sigma_y,
+                alpha_guess=1.0,        # scalar or (d,) initial prior precisions
+                mu0=mu0,
+                maxit=5000,
+            )
+        else:
+            m, S, alpha, beta, gamma, log_ev_dict = optimize_alpha_beta(
+                img_U, y,
+                alpha_guess=1.0,        # scalar or (d,) initial prior precisions
+                beta_guess=100.0,
+                mu0=mu0,
+                maxit=5000,
+            )
         
         n = Vt.shape[1]
         mean = np.zeros((n))
@@ -111,6 +102,7 @@ class Map:
         cov[:] = img_Vt.T @ S @ img_Vt + nul_Vt.T @ nul_Vt / alpha # important: null space still carry uncertainty!
         
         return mean, cov, log_ev_dict
+
 
 
 def fit_ydeg_range(data: LightCurveData, ydeg_min=2, ydeg_max=10):
@@ -155,6 +147,7 @@ def best_ydeg_maps(data: LightCurveData, ydeg_min=2, ydeg_max=10, map_res=30):
     n_wl = data.flux.shape[0]
     I_all_wl = np.zeros((n_wl, map_res * map_res))
     I_cov_all_wl = np.zeros((n_wl, map_res * map_res, map_res * map_res))
+    ydeg_all_wl = np.zeros(n_wl, dtype=int)
     for i_wl in range(n_wl):
         i_ydeg = i_ydeg_best[i_wl]
         ydeg = ydeg_range[i_ydeg]
@@ -164,6 +157,6 @@ def best_ydeg_maps(data: LightCurveData, ydeg_min=2, ydeg_max=10, map_res=30):
         cov = coeffs_covs[i_ydeg][i_wl]
         I_all_wl[i_wl] = I[:, 1:] @ mean.T + I[:, 0]  # adding the constant term back separately
         I_cov_all_wl[i_wl] = I[:, 1:] @ cov @ I[:, 1:].T
-        
+        ydeg_all_wl[i_wl] = ydeg
 
-    return ydeg, I_all_wl, I_cov_all_wl
+    return ydeg_all_wl, I_all_wl, I_cov_all_wl
